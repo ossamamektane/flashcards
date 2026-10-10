@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Flashcards" />
+<meta name="theme-color" content="#f5f5f5" />
+
+<title>Flashcards</title>
+<style>
+  :root {
+    --text: #333333;
+    --text-soft: #888888;
+    --text-faint: #aaaaaa;
+    --page: #f5f5f5;
+    --white: #ffffff;
+    --line: #e3e3e3;
+    --line-soft: #efefef;
+    --accent: #2f8fd8;
+    --accent-dark: #2679b8;
+    --pad: 20px;
+    --sans: "Helvetica Neue", Helvetica, Arial, "Segoe UI", "PingFang SC", "Microsoft Yahei", sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--page);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.7;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: pan-y;
+    overscroll-behavior: none;
+  }
+  body { min-height: 100vh; display: flex; }
+  .container {
+    width: 100%; max-width: 560px; margin: 0 auto;
+    padding: calc(24px + env(safe-area-inset-top)) var(--pad) calc(24px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column;
+  }
+  .topbar {
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 12px; margin-bottom: 26px;
+  }
+  .logo { font-size: 15px; font-weight: 500; }
+  .topbarnav { margin-left: auto; font-size: 12px; color: var(--text-faint); }
+
+  .heading-second { font-size: 22px; font-weight: 300; text-align: center; margin: 0 0 6px; line-height: 1.45; }
+  .intro { text-align: center; color: var(--text-soft); margin: 0 0 24px; font-size: 13px; }
+
+  .whiteboard { background: var(--white); border: 1px solid var(--line); border-radius: 3px; padding: 18px; }
+  .hidden { display: none !important; }
+
+  .editor-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .editor-top .label { font-size: 12px; color: var(--text-faint); }
+  .mini-row { display: flex; gap: 8px; }
+  .btn-mini {
+    background: var(--white); border: 1px solid var(--line); border-radius: 3px;
+    color: var(--text); font-size: 12px; font-family: var(--sans);
+    padding: 8px 12px; min-height: 34px; cursor: pointer;
+  }
+  .btn-mini:active { background: #f0f0f0; }
+  .btn-mini.danger { color: #c0392b; }
+  .btn-mini:disabled { color: #c4c4c4; cursor: not-allowed; }
+
+  textarea {
+    width: 100%; min-height: 200px; max-height: 460px;
+    border: 1px solid var(--line); border-radius: 3px; padding: 14px;
+    font-family: var(--sans); font-size: 16px; line-height: 1.7; color: var(--text);
+    resize: none; outline: none; background: var(--white);
+  }
+  textarea:focus { border-color: #cfcfcf; }
+  .hint { font-size: 12px; color: var(--text-faint); margin: 10px 0 0; }
+  .editor-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+  .btn-download-pc {
+    background: var(--accent); border: 1px solid var(--accent); color: #fff;
+    border-radius: 3px; padding: 13px 26px; min-height: 46px;
+    font-size: 14px; font-family: var(--sans); cursor: pointer;
+  }
+  .btn-download-pc:active { background: var(--accent-dark); }
+  .btn-download-pc:disabled { background: #eee; border-color: var(--line); color: #bbb; cursor: not-allowed; }
+  .btn-link {
+    background: none; border: 0; padding: 0; color: var(--text-soft);
+    font-size: 12px; font-family: var(--sans); cursor: pointer;
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+
+  .card {
+    position: relative; height: 300px; max-height: 44vh;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    display: flex; flex-direction: column; justify-content: center; padding: 34px 22px 30px;
+  }
+  .card p { margin: 0; font-size: 19px; font-weight: 300; line-height: 1.6; }
+  .idx { position: absolute; top: 14px; left: 16px; font-size: 11px; color: var(--text-faint); letter-spacing: .06em; }
+  .card.read-mark::after {
+    content: "\2713 read"; position: absolute; top: 14px; right: 16px;
+    font-size: 11px; color: var(--accent);
+  }
+  .card.finished p { color: var(--accent); }
+
+  .progress { height: 2px; background: var(--line-soft); margin: 14px 0 12px; }
+  .progress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s ease; }
+
+  .controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .btn-nav {
+    flex: 0 0 96px; background: var(--white); border: 1px solid var(--line); border-radius: 3px;
+    color: var(--text); padding: 13px 0; min-height: 46px; font-size: 14px;
+    font-family: var(--sans); cursor: pointer;
+  }
+  .btn-nav:active:not(:disabled) { background: #f0f0f0; }
+  .btn-nav:disabled { color: #c4c4c4; background: var(--white); cursor: not-allowed; }
+  .btn-check {
+    width: 100%; margin-top: 10px; background: var(--accent);
+    border: 1px solid var(--accent); border-radius: 3px; color: #fff;
+    padding: 15px 20px; min-height: 52px; font-size: 15px;
+    font-family: var(--sans); cursor: pointer;
+  }
+  .btn-check:active { background: var(--accent-dark); border-color: var(--accent-dark); }
+  .btn-check.done { background: var(--white); border-color: var(--line); color: var(--text-soft); }
+  .left-count { flex: 1 1 auto; font-size: 13px; color: var(--text-soft); white-space: nowrap; text-align: center; }
+  .left-count b { color: var(--text); font-weight: 500; }
+  .reader-foot { margin-top: 12px; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+
+  .footer { text-align: center; font-size: 12px; color: var(--text-faint); padding: 20px 0 4px; margin-top: auto; }
+
+  @media (max-width: 520px) {
+    .card { max-height: 420px; }
+    .heading-second { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<article class="container">
+  <div class="topbar">
+    <span class="topbarnav" id="barRight">Paste a list</span>
+  </div>
+
+  <h2 class="heading-second">Read a list, one line at a time.</h2>
+  <p class="intro">Simple and effective.</p>
+
+  <section class="whiteboard" id="editor">
+    <div class="editor-top">
+      <span class="label" id="editorLabel">Your list</span>
+      <span class="mini-row">
+        <button class="btn-mini" id="pasteBtn">Paste</button>
+        <button class="btn-mini danger" id="clearBtn">Clear all</button>
+      </span>
+    </div>
+    <textarea id="input" placeholder="- Paste a bulleted list here&#10;- Lines without a bullet are ignored&#10;- Works with Notion, Apple Notes, anything" spellcheck="false"></textarea>
+    <p class="hint" id="parsed">No bullets yet.</p>
+    <div class="editor-foot">
+      <button class="btn-link" id="loose">Accept plain lines</button>
+      <button class="btn-download-pc" id="begin" disabled>Start reading</button>
+    </div>
+  </section>
+
+  <section class="hidden" id="reader">
+    <div class="whiteboard card" id="card">
+      <span class="idx" id="idx"></span>
+      <p id="note" aria-live="polite"></p>
+    </div>
+    <div class="progress"><span id="bar"></span></div>
+    <div class="controls">
+      <button class="btn-nav" id="back">Back</button>
+      <span class="left-count" id="left"></span>
+      <button class="btn-nav" id="next">Skip</button>
+    </div>
+    <button class="btn-check" id="check">Mark as read</button>
+    <div class="reader-foot">
+      <button class="btn-link" id="reorder">Re-sequence</button>
+      <button class="btn-link" id="reset">Uncheck all</button>
+      <button class="btn-link" id="editList">Edit list</button>
+      <button class="btn-link" id="newList">New list</button>
+    </div>
+  </section>
+
+  <div class="footer" id="footer">Your list and place are saved on this device. Works offline.</div>
+</article>
+
+<script>
+/* BAKED_LIST_START */
+var BAKED_LIST = [];
+var BAKED_SOURCE = "";
+/* BAKED_LIST_END */
+
+(function () {
+  "use strict";
+
+  var input = document.getElementById("input");
+  var parsedEl = document.getElementById("parsed");
+  var beginBtn = document.getElementById("begin");
+  var looseBtn = document.getElementById("loose");
+  var pasteBtn = document.getElementById("pasteBtn");
+  var clearBtn = document.getElementById("clearBtn");
+  var editor = document.getElementById("editor");
+  var reader = document.getElementById("reader");
+  var noteEl = document.getElementById("note");
+  var idxEl = document.getElementById("idx");
+  var leftEl = document.getElementById("left");
+  var barEl = document.getElementById("bar");
+  var backBtn = document.getElementById("back");
+  var nextBtn = document.getElementById("next");
+  var checkBtn = document.getElementById("check");
+  var barRight = document.getElementById("barRight");
+  var card = document.getElementById("card");
+  var footer = document.getElementById("footer");
+
+  var looseMode = false;
+  var order = [];
+  var pos = 0;
+  var read = {};
+  var round = 1;
+  var storeKey = "";
+  var finished = false;
+  var view = "editor";
+  var SESSION_KEY = "oaat:session:v2";
+
+  /* ---------- 0. STORAGE (offline, on-device) ---------- */
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  // ask the browser not to evict saved data
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+
+  /* ---------- 1. PARSING: bullets only ---------- */
+  var BULLET = /^[\s\u00A0\u2000-\u200B\t]*(?:[-\u2013\u2014*+\u2022\u25E6\u2023\u25AA\u25AB\u25CF\u25CB\u2043\u00B7\u2219\u25B8\u279C\u2192\u2751\u25A0\u2756\u274D]|\d{1,3}[.)\]]|[a-zA-Z][.)])[\s\u00A0]+/;
+  var CHECKBOX = /^\[[ xX\u2713]?\]\s*/;
+
+  function clean(s) {
+    return s.replace(CHECKBOX, "")
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/\[(.+?)\]\((.+?)\)/g, "$1")
+      .replace(/[*_`]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function parse(raw) {
+    var out = [], seen = {};
+    raw.split(/\r?\n/).forEach(function (line) {
+      var text;
+      if (BULLET.test(line)) text = clean(line.replace(BULLET, ""));
+      else if (looseMode) text = clean(line);
+      else return;
+      if (!text || text.length < 2) return;
+      var key = text.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = 1;
+      out.push(text);
+    });
+    return out;
+  }
+
+  /* ---------- 2. SEQUENCER: keeps the order interesting ---------- */
+  var COMMON = ("the of and a to in is you that it he was for on are as with his they at be this have from or one had by but not what all were we when your can said there use an each which she do how their if will up other about out many then them these so some her would make like him into time has look two more write go see number no way could people my than first been call who its now find long down day did get come made may part over new sound take only little work know place year live me back give most very after thing our just name good man think say great where help through much before line right too mean old any same tell boy follow came want show also around form three small set put end does another well large must big even such because turn here why ask went men read need land different home us move try kind hand picture again change off play spell air away animal house point page letter mother answer found study still learn should world high every near add food between own below country plant last school father keep tree never start city earth eye light thought head under story saw left few while along might close something seem next hard open example begin life always those both paper together got group often run important until children side feet car mile night walk white sea began grow took river four carry state once book hear stop without second later miss idea enough eat face watch far indian really almost let above girl sometimes mountain cut young talk soon list song being leave family body music color stand sun questions fish area mark dog horse birds problem complete room knew since ever piece told usually didnt friends easy heard order red door sure become top ship across today during short better best however low hours black products happened whole measure remember early waves reached listen wind rock space covered fast several hold himself toward five step morning passed vowel true hundred against pattern numeral table north slowly money map farm pulled draw voice seen cold cried plan notice south sing war ground fall king town Ill unit figure certain field travel wood fire upon done english road halt ten fly gave box finally wait correct oh quickly person became shown minutes strong verb stars front feel fact inches street decided contain course surface produce building ocean class note nothing rest carefully scientists inside wheels stay green known island week less machine base ago stood plane system behind ran round boat game force brought understand warm common bring explain dry though language shape deep thousands yes clear equation yet government filled heat full hot check object am rule among").split(" ");
+  var COMMON_SET = {};
+  COMMON.forEach(function (w) { COMMON_SET[w] = 1; });
+
+  function syllables(word) {
+    word = word.toLowerCase().replace(/[^a-z]/g, "");
+    if (!word) return 0;
+    if (word.length <= 3) return 1;
+    word = word.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, "").replace(/^y/, "");
+    var m = word.match(/[aeiouy]{1,2}/g);
+    return m ? m.length : 1;
+  }
+
+  function measure(text) {
+    var words = text.split(/\s+/).filter(Boolean);
+    var syl = 0, rare = 0, longW = 0;
+    words.forEach(function (w) {
+      var bare = w.toLowerCase().replace(/[^a-z']/g, "");
+      syl += syllables(bare);
+      if (bare && !COMMON_SET[bare]) rare++;
+      if (bare.length >= 9) longW++;
+    });
+    var punct = (text.match(/[,;:\u2014\u2013()"]/g) || []).length;
+    var nLen = Math.min(1, text.length / 180);
+    var nWords = Math.min(1, words.length / 32);
+    var nSyl = Math.min(1, (syl / Math.max(1, words.length)) / 2.6);
+    var nRare = rare / Math.max(1, words.length);
+    var nLong = Math.min(1, longW / Math.max(1, words.length) * 3);
+    var nPunct = Math.min(1, punct / 6);
+    var grade = Math.min(1, (0.39 * words.length + 11.8 * (syl / Math.max(1, words.length)) - 15.59) / 14);
+    grade = Math.max(0, grade);
+    var cost = 0.26 * nLen + 0.14 * nWords + 0.16 * nSyl + 0.16 * nRare + 0.10 * nLong + 0.06 * nPunct + 0.12 * grade;
+    return {
+      text: text,
+      cost: Math.max(0.02, Math.min(1, cost)),
+      words: words.length,
+      start: (words[0] || "").toLowerCase().replace(/[^a-z]/g, ""),
+      keys: words.map(function (w) { return w.toLowerCase().replace(/[^a-z]/g, ""); })
+        .filter(function (w) { return w.length > 4 && !COMMON_SET[w]; })
+    };
+  }
+
+  function mulberry(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function overlap(a, b) {
+    if (!a.keys.length || !b.keys.length) return 0;
+    var set = {}, hits = 0;
+    a.keys.forEach(function (k) { set[k] = 1; });
+    b.keys.forEach(function (k) { if (set[k]) hits++; });
+    return hits / Math.min(a.keys.length, b.keys.length);
+  }
+
+  /* Builds a reading order tuned to attention: easy warm-up, hard while fresh,
+     variety between neighbours, lighter lines when fatigue builds. */
+  function sequence(items) {
+    var pool = items.map(measure);
+    if (pool.length < 3) return pool;
+    var rand = mulberry(Date.now() ^ (pool.length * 2654435761));
+    var out = [];
+    var fatigue = 0;
+    var prev = null;
+
+    pool.sort(function (a, b) { return a.cost - b.cost; });
+    var firstIdx = Math.min(pool.length - 1, Math.floor(rand() * Math.max(1, Math.ceil(pool.length * 0.12))));
+    prev = pool.splice(firstIdx, 1)[0];
+    out.push(prev);
+    fatigue = prev.cost * 0.5;
+
+    while (pool.length) {
+      var p = out.length / items.length;
+      var attention = 0.62 + 0.38 * Math.cos(p * Math.PI * 1.9) * (1 - p * 0.35) + 0.12 * p;
+      var capacity = Math.max(0.05, attention - fatigue * 0.55);
+      var wantContrast = out.length % 3 === 0 ? 1 : 0.45;
+      var bestI = 0, bestScore = -1e9;
+
+      for (var i = 0; i < pool.length; i++) {
+        var c = pool[i];
+        var fit = 1 - Math.abs(c.cost - capacity);
+        var contrast = Math.abs(c.cost - prev.cost);
+        var lenContrast = Math.min(1, Math.abs(c.words - prev.words) / 18);
+        var repeat = overlap(c, prev);
+        var sameStart = c.start && c.start === prev.start ? 1 : 0;
+        var tailBonus = pool.length <= 3 ? (1 - c.cost) * 0.4 : 0;
+        var score = 1.00 * fit
+          + 0.55 * contrast * wantContrast
+          + 0.30 * lenContrast
+          - 0.85 * repeat
+          - 0.40 * sameStart
+          + tailBonus
+          + 0.22 * rand();
+        if (score > bestScore) { bestScore = score; bestI = i; }
+      }
+
+      prev = pool.splice(bestI, 1)[0];
+      out.push(prev);
+      fatigue = fatigue * 0.62 + prev.cost * 0.55;
+    }
+    return out;
+  }
+
+  /* ---------- 3. CHECKLIST STATE (remembers order + position) ---------- */
+  function hash(str) {
+    var h = 5381;
+    for (var i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+  function keyFor(items) { return "oaat:" + hash(items.length + "|" + items.join("\u0001")); }
+
+  function save() {
+    if (storeKey) {
+      lsSet(storeKey, JSON.stringify({
+        read: Object.keys(read),
+        round: round,
+        order: order.map(function (o) { return o.text; }),
+        pos: pos
+      }));
+    }
+    saveSession();
+  }
+
+  function saveSession() {
+    lsSet(SESSION_KEY, JSON.stringify({
+      text: input.value,
+      loose: looseMode,
+      view: view,
+      t: Date.now()
+    }));
+  }
+
+  // returns saved order/pos if they still match this exact list
+  function loadState(items) {
+    storeKey = keyFor(items);
+    read = {}; round = 1;
+    var saved = null;
+    var raw = lsGet(storeKey);
+    if (raw) {
+      try {
+        var data = JSON.parse(raw);
+        var valid = {};
+        items.forEach(function (t) { valid[t] = 1; });
+        (data.read || []).forEach(function (t) { if (valid[t]) read[t] = 1; });
+        round = data.round || 1;
+        if (data.order && data.order.length === items.length &&
+            data.order.every(function (t) { return valid[t]; })) {
+          saved = { order: data.order, pos: Math.max(0, Math.min(items.length - 1, data.pos | 0)) };
+        }
+      } catch (e) {}
+    }
+    return saved;
+  }
+  function readCount() {
+    var n = 0;
+    for (var i = 0; i < order.length; i++) if (read[order[i].text]) n++;
+    return n;
+  }
+
+  /* ---------- 4. EDITOR ---------- */
+  function refresh() {
+    var items = parse(input.value);
+    var hasText = input.value.trim().length > 0;
+    clearBtn.disabled = !hasText;
+    if (!items.length) {
+      parsedEl.textContent = hasText
+        ? (looseMode ? "Nothing readable yet." : "No bullets found. Tap \u201cAccept plain lines\u201d if your list has none.")
+        : "No bullets yet.";
+      beginBtn.disabled = true;
+      barRight.textContent = "Paste a list";
+    } else {
+      parsedEl.textContent = items.length + (items.length === 1 ? " line ready" : " lines ready") + (looseMode ? " \u00b7 plain lines accepted" : " \u00b7 bullets only");
+      beginBtn.disabled = false;
+      barRight.textContent = items.length + " lines";
+    }
+    looseBtn.textContent = looseMode ? "Bullets only" : "Accept plain lines";
+    return items;
+  }
+
+  function clearAll() {
+    if (input.value.trim() && !confirm("Erase the current list?")) return;
+    var old = parse(input.value);
+    if (old.length) lsDel(keyFor(old));
+    input.value = "";
+    order = []; read = {}; round = 1; storeKey = ""; finished = false; pos = 0;
+    view = "editor";
+    saveSession();
+    footer.textContent = "Cleared. Paste your new list.";
+    refresh();
+    input.focus();
+  }
+
+  function pasteIn(replace) {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      input.focus();
+      footer.textContent = "Tap the box and paste with your keyboard.";
+      return;
+    }
+    navigator.clipboard.readText().then(function (txt) {
+      if (!txt) { footer.textContent = "Clipboard is empty."; return; }
+      input.value = replace ? txt : (input.value ? input.value + "\n" + txt : txt);
+      footer.textContent = "Pasted from clipboard.";
+      refresh();
+      saveSession();
+    }).catch(function () {
+      input.focus();
+      footer.textContent = "Tap the box and paste with your keyboard.";
+    });
+  }
+
+  /* ---------- 5. READER ---------- */
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+
+  function baseFooter() {
+    var src = (typeof BAKED_SOURCE !== "undefined" && BAKED_SOURCE) ? BAKED_SOURCE + " \u2014 " : "";
+    return src + order.length + " lines" + (round > 1 ? " \u00b7 round " + round : "") + " \u00b7 saved";
+  }
+
+  function render() {
+    if (finished || !order.length) return;
+    var done = readCount();
+    var left = order.length - done;
+    var isRead = !!read[order[pos].text];
+
+    noteEl.textContent = order[pos].text;
+    idxEl.textContent = pad(pos + 1) + " / " + pad(order.length);
+    card.classList.toggle("read-mark", isRead);
+    card.classList.remove("finished");
+
+    leftEl.innerHTML = left === 0 ? "All done" : "<b>" + left + "</b> left";
+    backBtn.disabled = pos === 0;
+    nextBtn.disabled = pos === order.length - 1;
+    checkBtn.textContent = isRead ? "Uncheck" : "Mark as read";
+    checkBtn.className = isRead ? "btn-check done" : "btn-check";
+
+    barEl.style.width = Math.round((done / order.length) * 100) + "%";
+    barRight.textContent = done + " / " + order.length + " read";
+    footer.textContent = baseFooter();
+    card.scrollTop = 0;
+    save();
+  }
+
+  function nextUnread(from) {
+    for (var i = from + 1; i < order.length; i++) if (!read[order[i].text]) return i;
+    for (var j = 0; j < order.length; j++) if (!read[order[j].text]) return j;
+    return -1;
+  }
+
+  function resetAll(newRound) {
+    read = {};
+    if (newRound) round++;
+    order = sequence(order.map(function (o) { return o.text; }));
+    pos = 0;
+    finished = false;
+    save();
+    render();
+  }
+
+  function celebrate() {
+    finished = true;
+    card.classList.add("finished");
+    card.classList.remove("read-mark");
+    noteEl.textContent = "All " + order.length + " lines read.";
+    idxEl.textContent = "round " + round;
+    leftEl.innerHTML = "<b>0</b> left";
+    barEl.style.width = "100%";
+    barRight.textContent = order.length + " / " + order.length + " read";
+    checkBtn.textContent = "Start over";
+    checkBtn.className = "btn-check";
+    backBtn.disabled = true;
+    nextBtn.disabled = true;
+    footer.textContent = "Resetting for a fresh round\u2026";
+    setTimeout(function () { if (finished) resetAll(true); }, 1600);
+  }
+
+  function toggleRead() {
+    if (finished) { resetAll(true); return; }
+    var t = order[pos].text;
+    if (read[t]) { delete read[t]; save(); render(); return; }
+    read[t] = 1;
+    save();
+    if (readCount() >= order.length) { celebrate(); return; }
+    var n = nextUnread(pos);
+    if (n !== -1) pos = n;
+    render();
+  }
+
+  function start() {
+    var items = parse(input.value);
+    if (!items.length) return;
+    var saved = loadState(items);
+    finished = false;
+    if (saved) {
+      // resume exactly where you left off
+      order = saved.order.map(measure);
+      pos = saved.pos;
+    } else {
+      order = sequence(items);
+      var first = read[order[0].text] ? nextUnread(0) : 0;
+      pos = first === -1 ? 0 : first;
+    }
+    view = "reader";
+    input.blur();
+    editor.classList.add("hidden");
+    reader.classList.remove("hidden");
+    if (readCount() >= order.length) resetAll(true);
+    else render();
+  }
+
+  function go(delta) {
+    if (finished) return;
+    var t = pos + delta;
+    if (t < 0 || t > order.length - 1) return;
+    pos = t;
+    render();
+  }
+
+  function openEditor(wipe) {
+    finished = false;
+    view = "editor";
+    reader.classList.add("hidden");
+    editor.classList.remove("hidden");
+    if (wipe) clearAll();
+    else { refresh(); footer.textContent = "Edit the list, then start reading again."; }
+    saveSession();
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- 6. WIRING ---------- */
+  var typingTimer = null;
+  input.addEventListener("input", function () {
+    refresh();
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(saveSession, 300);
+  });
+  input.addEventListener("paste", function () { setTimeout(function () { refresh(); saveSession(); }, 0); });
+  looseBtn.addEventListener("click", function () { looseMode = !looseMode; refresh(); saveSession(); });
+  pasteBtn.addEventListener("click", function () { pasteIn(!input.value.trim() ? true : confirm("Replace the current list? Cancel adds to the end.")); });
+  clearBtn.addEventListener("click", clearAll);
+  beginBtn.addEventListener("click", start);
+  nextBtn.addEventListener("click", function () { go(1); });
+  backBtn.addEventListener("click", function () { go(-1); });
+  checkBtn.addEventListener("click", toggleRead);
+  document.getElementById("reset").addEventListener("click", function () {
+    if (!confirm("Uncheck all lines?")) return;
+    finished = false; round = 1; resetAll(false);
+  });
+  document.getElementById("reorder").addEventListener("click", function () {
+    finished = false;
+    order = sequence(order.map(function (o) { return o.text; }));
+    var n = read[order[0].text] ? nextUnread(0) : 0;
+    pos = n === -1 ? 0 : n;
+    render();
+  });
+  document.getElementById("editList").addEventListener("click", function () { openEditor(false); });
+  document.getElementById("newList").addEventListener("click", function () { openEditor(true); });
+
+  // save whenever the app is hidden or closed
+  window.addEventListener("pagehide", save);
+  document.addEventListener("visibilitychange", function () { if (document.hidden) save(); });
+
+  // swipe between lines
+  var sx = 0, sy = 0;
+  card.addEventListener("touchstart", function (e) {
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+  }, { passive: true });
+  card.addEventListener("touchend", function (e) {
+    var dx = e.changedTouches[0].clientX - sx;
+    var dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.6) go(dx < 0 ? 1 : -1);
+  }, { passive: true });
+
+  document.addEventListener("keydown", function (e) {
+    if (reader.classList.contains("hidden")) return;
+    if (e.key === "ArrowRight") go(1);
+    if (e.key === "ArrowLeft") go(-1);
+    if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleRead(); }
+  });
+
+  // no pinch zoom / double-tap zoom
+  document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
+  var lastTouch = 0;
+  document.addEventListener("touchend", function (e) {
+    var now = Date.now();
+    if (now - lastTouch < 320) e.preventDefault();
+    lastTouch = now;
+  }, false);
+
+  /* ---------- 7. STARTUP: restore last session ---------- */
+  var session = null;
+  try { session = JSON.parse(lsGet(SESSION_KEY) || "null"); } catch (e) {}
+
+  if (typeof BAKED_LIST !== "undefined" && BAKED_LIST && BAKED_LIST.length) {
+    input.value = BAKED_LIST.map(function (t) { return "- " + t; }).join("\n");
+    refresh();
+    start();
+  } else if (session && session.text) {
+    input.value = session.text;
+    looseMode = !!session.loose;
+    refresh();
+    if (session.view === "reader" && parse(input.value).length) start();
+    else footer.textContent = "Your list was restored.";
+  } else {
+    refresh();
+  }
+
+  /* ---------- 8. OFFLINE (when hosted as an installable app) ---------- */
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(function () {});
+    });
+  }
+})();
+</script>
+</body>
+</html>
