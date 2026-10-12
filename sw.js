@@ -1,5 +1,5 @@
 // Flashcards offline cache. Bump VERSION after editing index.html.
-const VERSION = "flashcards-v1";
+const VERSION = "flashcards-v2";
 const FILES = ["./", "./index.html"];
 
 self.addEventListener("install", (e) => {
@@ -22,7 +22,7 @@ self.addEventListener("fetch", (e) => {
       cache.match(e.request, { ignoreSearch: true }).then((hit) => {
         const net = fetch(e.request)
           .then((res) => { if (res.ok) cache.put(e.request, res.clone()); return res; })
-          .catch(() => hit || cache.match("./index.html"));
+          .catch(() => hit || cache.match("./index.html").then((r) => r || Response.error()));
         return hit || net;
       })
     )
