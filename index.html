@@ -91,17 +91,42 @@
   }
 
   .card {
-    position: relative; height: 300px; max-height: 44vh;
-    overflow-y: auto; -webkit-overflow-scrolling: touch;
-    display: flex; flex-direction: column; justify-content: center; padding: 34px 22px 30px;
+    position: relative; height: 300px; max-height: 44vh; min-height: 200px;
+    display: flex; flex-direction: column; padding: 0; overflow: hidden;
   }
-  .card p { margin: 0; font-size: 19px; font-weight: 300; line-height: 1.6; }
-  .idx { position: absolute; top: 14px; left: 16px; font-size: 11px; color: var(--text-faint); letter-spacing: .06em; }
-  .card.read-mark::after {
-    content: "\2713 read"; position: absolute; top: 14px; right: 16px;
-    font-size: 11px; color: var(--accent);
+  .card-head {
+    flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px 6px; line-height: 1.4; background: var(--white);
   }
+  .card-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    display: flex; flex-direction: column; padding: 6px 22px 24px;
+  }
+  /* margin:auto centers short notes but lets long notes scroll from the top */
+  .card-body p {
+    margin: auto 0; font-size: 19px; font-weight: 300; line-height: 1.6;
+    overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap;
+  }
+  .idx { font-size: 11px; color: var(--text-faint); letter-spacing: .06em; }
+  .read-tag { font-size: 11px; color: var(--accent); visibility: hidden; }
+  .card.read-mark .read-tag { visibility: visible; }
   .card.finished p { color: var(--accent); }
+  button { touch-action: manipulation; }
+
+  .modal-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .modal {
+    background: var(--white); border-radius: 6px; width: 100%; max-width: 340px;
+    padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,.18);
+  }
+  .modal p { margin: 0 0 16px; font-size: 15px; }
+  .modal-row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .modal-row .btn-mini { min-height: 40px; padding: 8px 14px; }
+  .modal-row .btn-mini.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .modal-row .btn-mini.primary.danger { background: #c0392b; border-color: #c0392b; color: #fff; }
 
   .progress { height: 2px; background: var(--line-soft); margin: 14px 0 12px; }
   .progress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s ease; }
@@ -161,8 +186,13 @@
 
   <section class="hidden" id="reader">
     <div class="whiteboard card" id="card">
-      <span class="idx" id="idx"></span>
-      <p id="note" aria-live="polite"></p>
+      <div class="card-head">
+        <span class="idx" id="idx"></span>
+        <span class="read-tag">&#10003; read</span>
+      </div>
+      <div class="card-body" id="cardBody">
+        <p id="note" aria-live="polite"></p>
+      </div>
     </div>
     <div class="progress"><span id="bar"></span></div>
     <div class="controls">
@@ -180,6 +210,17 @@
   </section>
 
   <div class="footer" id="footer">Your list and place are saved on this device. Works offline.</div>
+
+  <div class="modal-back hidden" id="modal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <p id="modalMsg"></p>
+      <div class="modal-row">
+        <button class="btn-mini" id="modalAlt"></button>
+        <button class="btn-mini" id="modalCancel">Cancel</button>
+        <button class="btn-mini primary" id="modalOk">OK</button>
+      </div>
+    </div>
+  </div>
 </article>
 
 <script>
@@ -209,6 +250,12 @@ var BAKED_SOURCE = "";
   var barRight = document.getElementById("barRight");
   var card = document.getElementById("card");
   var footer = document.getElementById("footer");
+  var cardBody = document.getElementById("cardBody");
+  var modal = document.getElementById("modal");
+  var modalMsg = document.getElementById("modalMsg");
+  var modalOk = document.getElementById("modalOk");
+  var modalAlt = document.getElementById("modalAlt");
+  var modalCancel = document.getElementById("modalCancel");
 
   var looseMode = false;
   var order = [];
@@ -219,6 +266,7 @@ var BAKED_SOURCE = "";
   var finished = false;
   var view = "editor";
   var SESSION_KEY = "oaat:session:v2";
+  var typingTimer = null;
 
   /* ---------- 0. STORAGE (offline, on-device) ---------- */
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -226,6 +274,29 @@ var BAKED_SOURCE = "";
   function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
   // ask the browser not to evict saved data
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+
+  /* ---------- 0b. IN-PAGE CONFIRM (native confirm() is blocked in embeds/some web apps) ---------- */
+  var modalHandlers = null;
+  function ask(opts) {
+    modalMsg.textContent = opts.msg;
+    modalOk.textContent = opts.ok || "OK";
+    modalOk.className = "btn-mini primary" + (opts.danger ? " danger" : "");
+    modalAlt.textContent = opts.alt || "";
+    modalAlt.classList.toggle("hidden", !opts.alt);
+    modalHandlers = opts;
+    modal.classList.remove("hidden");
+    setTimeout(function () { modalOk.focus(); }, 0);
+  }
+  function closeModal(which) {
+    var h = modalHandlers;
+    modalHandlers = null;
+    modal.classList.add("hidden");
+    if (h && typeof h[which] === "function") h[which]();
+  }
+  modalOk.addEventListener("click", function () { closeModal("onOk"); });
+  modalAlt.addEventListener("click", function () { closeModal("onAlt"); });
+  modalCancel.addEventListener("click", function () { closeModal("onCancel"); });
+  modal.addEventListener("click", function (e) { if (e.target === modal) closeModal("onCancel"); });
 
   /* ---------- 1. PARSING: bullets only ---------- */
   var BULLET = /^[\s\u00A0\u2000-\u200B\t]*(?:[-\u2013\u2014*+\u2022\u25E6\u2023\u25AA\u25AB\u25CF\u25CB\u2043\u00B7\u2219\u25B8\u279C\u2192\u2751\u25A0\u2756\u274D]|\d{1,3}[.)\]]|[a-zA-Z][.)])[\s\u00A0]+/;
@@ -441,7 +512,13 @@ var BAKED_SOURCE = "";
   }
 
   function clearAll() {
-    if (input.value.trim() && !confirm("Erase the current list?")) return;
+    if (input.value.trim()) {
+      ask({ msg: "Erase the current list?", ok: "Erase", danger: true, onOk: doClear });
+    } else doClear();
+  }
+
+  function doClear() {
+    clearTimeout(typingTimer);
     var old = parse(input.value);
     if (old.length) lsDel(keyFor(old));
     input.value = "";
@@ -499,7 +576,7 @@ var BAKED_SOURCE = "";
     barEl.style.width = Math.round((done / order.length) * 100) + "%";
     barRight.textContent = done + " / " + order.length + " read";
     footer.textContent = baseFooter();
-    card.scrollTop = 0;
+    cardBody.scrollTop = 0;
     save();
   }
 
@@ -532,6 +609,7 @@ var BAKED_SOURCE = "";
     checkBtn.className = "btn-check";
     backBtn.disabled = true;
     nextBtn.disabled = true;
+    cardBody.scrollTop = 0;
     footer.textContent = "Resetting for a fresh round\u2026";
     setTimeout(function () { if (finished) resetAll(true); }, 1600);
   }
@@ -583,14 +661,14 @@ var BAKED_SOURCE = "";
     view = "editor";
     reader.classList.add("hidden");
     editor.classList.remove("hidden");
-    if (wipe) clearAll();
-    else { refresh(); footer.textContent = "Edit the list, then start reading again."; }
+    refresh();
     saveSession();
+    if (wipe) clearAll();
+    else footer.textContent = "Edit the list, then start reading again.";
     window.scrollTo(0, 0);
   }
 
   /* ---------- 6. WIRING ---------- */
-  var typingTimer = null;
   input.addEventListener("input", function () {
     refresh();
     clearTimeout(typingTimer);
@@ -598,15 +676,19 @@ var BAKED_SOURCE = "";
   });
   input.addEventListener("paste", function () { setTimeout(function () { refresh(); saveSession(); }, 0); });
   looseBtn.addEventListener("click", function () { looseMode = !looseMode; refresh(); saveSession(); });
-  pasteBtn.addEventListener("click", function () { pasteIn(!input.value.trim() ? true : confirm("Replace the current list? Cancel adds to the end.")); });
+  pasteBtn.addEventListener("click", function () {
+    if (!input.value.trim()) { pasteIn(true); return; }
+    ask({ msg: "Replace the current list, or add the clipboard to the end?", ok: "Replace", alt: "Add to end",
+      onOk: function () { pasteIn(true); }, onAlt: function () { pasteIn(false); } });
+  });
   clearBtn.addEventListener("click", clearAll);
   beginBtn.addEventListener("click", start);
   nextBtn.addEventListener("click", function () { go(1); });
   backBtn.addEventListener("click", function () { go(-1); });
   checkBtn.addEventListener("click", toggleRead);
   document.getElementById("reset").addEventListener("click", function () {
-    if (!confirm("Uncheck all lines?")) return;
-    finished = false; round = 1; resetAll(false);
+    ask({ msg: "Uncheck all lines?", ok: "Uncheck all", danger: true,
+      onOk: function () { finished = false; round = 1; resetAll(false); } });
   });
   document.getElementById("reorder").addEventListener("click", function () {
     finished = false;
@@ -634,7 +716,12 @@ var BAKED_SOURCE = "";
   }, { passive: true });
 
   document.addEventListener("keydown", function (e) {
+    if (!modal.classList.contains("hidden")) {
+      if (e.key === "Escape") closeModal("onCancel");
+      return;
+    }
     if (reader.classList.contains("hidden")) return;
+    if (e.target && e.target.tagName === "BUTTON" && (e.key === " " || e.key === "Enter")) return;
     if (e.key === "ArrowRight") go(1);
     if (e.key === "ArrowLeft") go(-1);
     if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleRead(); }
@@ -642,12 +729,7 @@ var BAKED_SOURCE = "";
 
   // no pinch zoom / double-tap zoom
   document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
-  var lastTouch = 0;
-  document.addEventListener("touchend", function (e) {
-    var now = Date.now();
-    if (now - lastTouch < 320) e.preventDefault();
-    lastTouch = now;
-  }, false);
+  // double-tap zoom is disabled via CSS touch-action (a JS touchend blocker was swallowing fast taps)
 
   /* ---------- 7. STARTUP: restore last session ---------- */
   var session = null;
